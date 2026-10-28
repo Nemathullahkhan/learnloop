@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flashcard practice</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--muted:#5d6470;--card:#f3f4f7;--line:#d5d8df;--accent:#2457d6;--ok:#1a7f37;--bad:#c62828}
+@media (prefers-color-scheme:dark){:root{--bg:#15171c;--fg:#ececec;--muted:#a0a7b4;--card:#22252d;--line:#363a45;--accent:#7aa2ff;--ok:#56d364;--bad:#ff7b72}}
+body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:640px;margin:0 auto}
+h1{font-size:1.4rem}
+textarea,button{font:inherit;color:inherit}
+textarea{width:100%;box-sizing:border-box;min-height:6rem;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px}
+button{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px 14px;cursor:pointer}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ok{border-color:var(--ok);color:var(--ok)}.bad{border-color:var(--bad);color:var(--bad)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:20px;margin:16px 0;min-height:6rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.muted{color:var(--muted);font-size:.9rem}
+[hidden]{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Flashcard practice</h1>
+<p class="muted">Cards live in 5 boxes. Right moves a card up a box and it comes back later; wrong sends it to box 1.</p>
+
+<section aria-labelledby="review-h">
+  <h2 id="review-h">Review</h2>
+  <p id="summary" class="muted"></p>
+  <div class="card" id="card"><p id="front"></p><p id="back" hidden></p></div>
+  <div class="row">
+    <button id="show" class="primary">Show answer</button>
+    <button id="right" class="ok" hidden>Right</button>
+    <button id="wrong" class="bad" hidden>Wrong</button>
+  </div>
+</section>
+
+<section aria-labelledby="add-h">
+  <h2 id="add-h">Add cards</h2>
+  <label for="json" class="muted">Paste JSON: [{"front":"...","back":"...","source":"..."}]</label>
+  <textarea id="json" spellcheck="false"></textarea>
+  <div class="row">
+    <button id="load">Load cards</button>
+    <button id="export">Export JSON</button>
+  </div>
+</section>
+<p id="status" class="muted" role="status" aria-live="polite"></p>
+</main>
+<script>
+const KEY = "learnloop-cards", DAYS = [1, 2, 4, 8, 16]; // box 1..5 -> days until next review
+const $ = id => document.getElementById(id);
+const dateIn = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString("en-CA"); };
+let cards = [], current = null;
+
+function status(msg) { $("status").textContent = msg; }
+function load() { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; } }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(cards)); } catch (e) { status("Storage is blocked. Use Export JSON to keep your cards."); } }
+
+function render() {
+  const due = cards.filter(c => c.due <= dateIn(0));
+  current = due[0] || null;
+  const boxes = [1, 2, 3, 4, 5].map(b => "box " + b + ": " + cards.filter(c => c.box === b).length).join(", ");
+  $("summary").textContent = cards.length ? due.length + " due. " + boxes : "No cards yet. Add some below.";
+  $("front").textContent = current ? current.front : (cards.length ? "Nothing due. Next review: " + cards.map(c => c.due).sort()[0] : "");
+  $("back").textContent = current ? current.back : "";
+  $("back").hidden = true;
+  $("show").hidden = !current;
+  $("right").hidden = $("wrong").hidden = true;
+}
+
+function mark(right) {
+  current.box = right ? Math.min(current.box + 1, 5) : 1;
+  current.due = dateIn(DAYS[current.box - 1]);
+  save(); render();
+}
+
+$("show").onclick = () => { $("back").hidden = false; $("show").hidden = true; $("right").hidden = $("wrong").hidden = false; };
+$("right").onclick = () => mark(true);
+$("wrong").onclick = () => mark(false);
+
+$("load").onclick = () => {
+  let list;
+  try { list = JSON.parse($("json").value); } catch (e) { return status("That is not valid JSON."); }
+  if (!Array.isArray(list)) return status("Expected a JSON array of cards.");
+  let added = 0, skipped = 0;
+  for (const c of list) {
+    if (!c || typeof c.front !== "string" || typeof c.back !== "string" || cards.some(x => x.front === c.front)) { skipped++; continue; }
+    cards.push({ front: c.front, back: c.back, source: c.source || "", box: 1, due: dateIn(0) });
+    added++;
+  }
+  save(); render(); $("json").value = "";
+  status("Added " + added + " cards, skipped " + skipped + " (invalid or already present).");
+};
+
+$("export").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(cards, null, 2)], { type: "application/json" }));
+  a.download = "cards.json"; a.click(); URL.revokeObjectURL(a.href);
+};
+
+cards = load(); render();
+</script>
+</body>
+</html>

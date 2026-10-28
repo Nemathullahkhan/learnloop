@@ -1,0 +1,11 @@
+{
+  "name": "rate-limiting-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Token-bucket rate limiter with no dependencies, built as the worked example for learnloop.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}
